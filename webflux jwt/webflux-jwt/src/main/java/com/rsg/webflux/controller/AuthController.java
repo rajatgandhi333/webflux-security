@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -19,6 +20,9 @@ public class AuthController {
 
     @Autowired
     private JWTService jwtService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     public AuthController(ReactiveUserDetailsService reactiveUserDetailsService) {
         this.reactiveUserDetailsService = reactiveUserDetailsService;
@@ -37,12 +41,14 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse<String>>> login(@RequestBody User user) {
-        Mono<UserDetails> dbUser = reactiveUserDetailsService.findByUsername(user.getEmailId()).defaultIfEmpty(null);
+        Mono<UserDetails> dbUser = reactiveUserDetailsService.findByUsername(user.getEmailId());
         return dbUser.flatMap(u -> {
             //null check
             if (u != null) {
-                if (u.getPassword().equals(user.getPassword())) {
-                      return Mono.just(
+                //added encoder
+                //order is important
+                if (passwordEncoder.matches(user.getPassword(), u.getPassword())) {
+                    return Mono.just(
                             ResponseEntity.ok(
                                     new LoginResponse<>(jwtService.generateToken(u.getUsername()), "Success")
                             )
@@ -57,7 +63,7 @@ public class AuthController {
             } else {
                 return Mono.just(
                         ResponseEntity.status(HttpStatus.NOT_FOUND).body(
-                                new LoginResponse<>("Not found", "not found")
+                                new LoginResponse<>("User Not found, please register", "not found")
                         )
                 );
             }
